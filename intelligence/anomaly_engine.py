@@ -23,6 +23,13 @@ class AnomalyResult:
     temperature: float = 0.0
     vibration: float   = 0.0
     pressure: float    = 0.0
+    # CNC fields (populated when using CNC sensor)
+    spindle_current: float     = 0.0
+    servo_torque: float        = 0.0
+    coolant_flow: float        = 0.0
+    acoustic_emission: float   = 0.0
+    feed_rate_deviation: float = 0.0
+    thermal_gradient: float    = 0.0
     ground_truth: bool = False
     gt_label: Optional[str] = None
 
@@ -57,6 +64,20 @@ class AnomalyDetector:
         self._history.append(anomaly_score)
 
         # --- WARMUP: just store every vector as a "normal" baseline ---
+        # extract CNC fields if available
+        is_cnc = hasattr(reading, 'spindle_current')
+        extras = dict(
+            spindle_current     = float(reading.spindle_current)     if is_cnc else 0.0,
+            servo_torque        = float(reading.servo_torque)        if is_cnc else 0.0,
+            coolant_flow        = float(reading.coolant_flow)        if is_cnc else 0.0,
+            acoustic_emission   = float(reading.acoustic_emission)   if is_cnc else 0.0,
+            feed_rate_deviation = float(reading.feed_rate_deviation) if is_cnc else 0.0,
+            thermal_gradient    = float(reading.thermal_gradient)    if is_cnc else 0.0,
+            temperature         = float(reading.temperature)         if hasattr(reading,'temperature') else 0.0,
+            vibration           = float(reading.vibration)           if hasattr(reading,'vibration')   else 0.0,
+            pressure            = float(reading.pressure)            if hasattr(reading,'pressure')    else 0.0,
+        )
+
         if self._step <= config.WARMUP_STEPS:
             self._engine.store(vector)
             return AnomalyResult(
@@ -64,30 +85,56 @@ class AnomalyDetector:
                 anomaly_score=anomaly_score, is_anomaly=False,
                 spike=False, confidence=0.0,
                 reason=f"WARMUP {self._step}/{config.WARMUP_STEPS}",
-                temperature=reading.temperature,
-                vibration=reading.vibration,
-                pressure=reading.pressure,
                 ground_truth=reading.ground_truth_anomaly,
                 gt_label=reading.anomaly_label,
+                **extras,
             )
 
         # --- DETECTION ---
-        low_sim = similarity > 0 and similarity < config.ANOMALY_THRESHOLD
+        low_sim    = similarity > 0 and similarity < config.ANOMALY_THRESHOLD
         is_anomaly = low_sim or spike
 
         if is_anomaly:
-            parts = []
-            if low_sim:
-                parts.append(f"LOW_SIM({similarity:.3f})")
-            if spike:
-                parts.append(f"SPIKE(z>{config.SPIKE_Z_SCORE}σ)")
-            reason = " + ".join(parts)
+            faults = []
+            if is_cnc:
+                sc = extras["spindle_current"]
+                st = extras["servo_torque"]
+                cf = extras["coolant_flow"]
+                ae = extras["acoustic_emission"]
+                fd = extras["feed_rate_deviation"]
+                tg = extras["thermal_gradient"]
+
+                # use percentage deviation from known normal baseline
+                if sc > 5.5:    faults.append(f"Spindle Current {sc:.2f}A — motor load high (normal ~4.5A)")
+                if st > 16.0:   faults.append(f"Servo Torque {st:.2f}Nm — axis stress high (normal ~12Nm)")
+                if cf < 6.0:    faults.append(f"Coolant Flow {cf:.2f} L/min — flow dropping (normal ~8.5)")
+                if ae > 60.0:   faults.append(f"Acoustic Emission {ae:.1f}kHz — abnormal noise (normal ~47kHz)")
+                if fd > 1.0:    faults.append(f"Feed Rate Deviation {fd:.3f}% — controller off (normal ~0.2%)")
+                if tg > 4.0:    faults.append(f"Thermal Gradient {tg:.2f}C — heat building (normal ~2.2C)")
+
+            if faults:
+                reason = " | ".join(faults)
+            else:
+                # Qdrant Edge flagged it but no single sensor crossed threshold
+                # report the most deviated sensor
+                if is_cnc:
+                    deviations = {
+                        f"Spindle Current {extras['spindle_current']:.2f}A": abs(extras["spindle_current"] - 4.5) / 4.5,
+                        f"Servo Torque {extras['servo_torque']:.2f}Nm":      abs(extras["servo_torque"] - 12.0) / 12.0,
+                        f"Coolant Flow {extras['coolant_flow']:.2f}L/min":   abs(extras["coolant_flow"] - 8.5) / 8.5,
+                        f"Acoustic {extras['acoustic_emission']:.1f}kHz":    abs(extras["acoustic_emission"] - 47.0) / 47.0,
+                        f"Thermal {extras['thermal_gradient']:.2f}C":        abs(extras["thermal_gradient"] - 2.2) / 2.2,
+                    }
+                    worst = max(deviations, key=deviations.get)
+                    reason = f"{worst} — unusual reading detected by Qdrant Edge"
+                else:
+                    reason = f"Unfamiliar pattern (similarity={similarity:.3f})"
+
             confidence = max(
                 (config.ANOMALY_THRESHOLD - similarity) / config.ANOMALY_THRESHOLD if low_sim else 0.0,
                 spike_conf,
             )
         else:
-            # Normal → store as a learned pattern (self-supervised)
             self._engine.store(vector)
             reason = f"NORMAL(sim={similarity:.3f})"
             confidence = 0.0
@@ -97,9 +144,7 @@ class AnomalyDetector:
             anomaly_score=anomaly_score, is_anomaly=is_anomaly,
             spike=spike, confidence=round(confidence, 3),
             reason=reason,
-            temperature=reading.temperature,
-            vibration=reading.vibration,
-            pressure=reading.pressure,
             ground_truth=reading.ground_truth_anomaly,
             gt_label=reading.anomaly_label,
+            **extras,
         )

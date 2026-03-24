@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Qdrant Edge Anomaly Detection
-==============================
-HTTP polling — browser hits /data every 500ms to get latest results.
-No WebSocket needed.
+Qdrant Edge — CNC Machine Anomaly Detection
+============================================
+6-sensor CNC predictive maintenance using Qdrant Edge (qdrant-edge-py).
+HTTP polling dashboard. No WebSocket needed.
 """
 
 import json
@@ -14,48 +14,76 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 import config
-from sensors.multi_sensor import MultiSensorSimulator
-from edge.feature_extractor import FeatureExtractor
+from sensors.cnc_sensor import CNCMachineSimulator, CNCReading
+from edge.cnc_extractor import CNCFeatureExtractor
 from core.qdrant_engine import QdrantEdgeEngine
-from intelligence.anomaly_engine import AnomalyDetector, AnomalyResult
+from intelligence.anomaly_engine import AnomalyDetector
 from intelligence.spike_tracker import SpikeTracker
 
-# ── shared state ─────────────────────────────────────────────────
-_lock    = threading.Lock()
-_history: list = []        # all payloads so far (browser replays on load)
-_latest:  dict = {}        # most recent single payload
+# ── shared state ──────────────────────────────────────────────────────
+_lock      = threading.Lock()
+_history:  list = []
+_alerts:   list = []   # notification queue
+_latest:   dict = {}
 
 
-def _store(result: AnomalyResult, pattern_count: int):
+def _store(reading: CNCReading, result, pattern_count: int):
     payload = {
-        "step":          int(result.step),
-        "temperature":   float(result.temperature),
-        "vibration":     float(result.vibration),
-        "pressure":      float(result.pressure),
-        "similarity":    float(result.similarity),
-        "anomaly_score": float(result.anomaly_score),
-        "is_anomaly":    bool(result.is_anomaly),
-        "spike":         bool(result.spike),
-        "confidence":    float(result.confidence),
-        "reason":        str(result.reason),
-        "ground_truth":  bool(result.ground_truth),
-        "gt_label":      result.gt_label,
-        "pattern_count": int(pattern_count),
+        "step":                 int(result.step),
+        # CNC sensors
+        "spindle_current":      float(reading.spindle_current),
+        "servo_torque":         float(reading.servo_torque),
+        "coolant_flow":         float(reading.coolant_flow),
+        "acoustic_emission":    float(reading.acoustic_emission),
+        "feed_rate_deviation":  float(reading.feed_rate_deviation),
+        "thermal_gradient":     float(reading.thermal_gradient),
+        # anomaly fields
+        "similarity":           float(result.similarity),
+        "anomaly_score":        float(result.anomaly_score),
+        "is_anomaly":           bool(result.is_anomaly),
+        "spike":                bool(result.spike),
+        "confidence":           float(result.confidence),
+        "reason":               str(result.reason),
+        "ground_truth":         bool(result.ground_truth),
+        "gt_label":             reading.anomaly_label,
+        "pattern_count":        int(pattern_count),
     }
+
     with _lock:
         _history.append(payload)
-        if len(_history) > 500:
+        if len(_history) > 600:
             _history.pop(0)
         _latest.update(payload)
 
+        # notification alert
+        if result.is_anomaly:
+            alert = {
+                "id":        len(_alerts),
+                "step":      int(result.step),
+                "time":      time.strftime("%H:%M:%S"),
+                "reason":    str(result.reason),
+                "label":     (reading.anomaly_label or "ANOMALY").replace("_", " ").upper(),
+                "score":     float(result.anomaly_score),
+                "severity":  "CRITICAL" if result.anomaly_score > 0.6 else "WARNING",
+                "spindle":   float(reading.spindle_current),
+                "servo":     float(reading.servo_torque),
+                "coolant":   float(reading.coolant_flow),
+                "acoustic":  float(reading.acoustic_emission),
+                "thermal":   float(reading.thermal_gradient),
+            }
+            _alerts.append(alert)
+            if len(_alerts) > 50:
+                _alerts.pop(0)
 
-# ── HTTP handler ─────────────────────────────────────────────────
+
+# ── HTTP handler ──────────────────────────────────────────────────────
 PROJECT_DIR = Path(__file__).parent
+
 
 class Handler(BaseHTTPRequestHandler):
 
     def log_message(self, *args):
-        pass  # silence access logs
+        pass
 
     def _json(self, data):
         body = json.dumps(data).encode()
@@ -79,35 +107,35 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
 
     def do_GET(self):
-        if self.path == "/" or self.path == "/index.html":
+        if self.path in ("/", "/index.html"):
             self._file(PROJECT_DIR / "index.html", "text/html")
-
         elif self.path == "/data":
-            # return ALL history so browser can replay from beginning
             with _lock:
                 data = list(_history)
             self._json(data)
-
         elif self.path == "/latest":
             with _lock:
                 data = dict(_latest)
             self._json(data)
-
+        elif self.path == "/alerts":
+            with _lock:
+                data = list(_alerts)
+            self._json(data)
         else:
             self.send_response(404)
             self.end_headers()
 
 
-# ── detection loop ────────────────────────────────────────────────
+# ── detection loop ────────────────────────────────────────────────────
 def detection_loop():
-    sensor    = MultiSensorSimulator(seed=42)
-    extractor = FeatureExtractor()
+    sensor    = CNCMachineSimulator(seed=42)
+    extractor = CNCFeatureExtractor()
     engine    = QdrantEdgeEngine(fresh=True)
     detector  = AnomalyDetector(engine)
-    tracker   = SpikeTracker(maxlen=500)
+    tracker   = SpikeTracker(maxlen=600)
 
     print(f"[engine] Qdrant Edge shard: {config.QDRANT_SHARD_PATH}")
-    print(f"[engine] {config.VECTOR_SIZE}D vectors | warmup={config.WARMUP_STEPS} | threshold={config.ANOMALY_THRESHOLD}")
+    print(f"[engine] {config.VECTOR_SIZE}D CNC vectors | warmup={config.WARMUP_STEPS} | threshold={config.ANOMALY_THRESHOLD}")
 
     def _steps():
         if config.TOTAL_STEPS == 0:
@@ -126,10 +154,11 @@ def detection_loop():
 
             result = detector.process(vector, reading)
             tracker.record(result)
-            _store(result, engine.pattern_count)
+            _store(reading, result, engine.pattern_count)
 
             if result.is_anomaly:
-                print(f"  ANOMALY step={result.step:4d} score={result.anomaly_score:.4f} {result.reason}")
+                sev = " CRITICAL" if result.anomaly_score > 0.5 else "  WARNING"
+                print(f"  {sev}  step={result.step:4d}  score={result.anomaly_score:.4f}  {result.reason}")
 
             time.sleep(config.SLEEP_INTERVAL)
 
@@ -142,17 +171,14 @@ def detection_loop():
     print(f"\n[done] steps={detector._step} anomalies={tracker.total_anomalies} precision={tracker.precision:.0%}")
 
 
-# ── main ──────────────────────────────────────────────────────────
+# ── main ──────────────────────────────────────────────────────────────
 def main():
-    # start detection thread
     t = threading.Thread(target=detection_loop, daemon=True)
     t.start()
 
-    # start HTTP server
     server = HTTPServer(("localhost", 8766), Handler)
-    print("⚡ Qdrant Edge Anomaly Detection")
+    print("⚡ Qdrant Edge — CNC Anomaly Detection")
     print("   Dashboard : http://localhost:8766")
-    print("   (open in browser — no WebSocket needed)")
     print()
     webbrowser.open("http://localhost:8766")
 

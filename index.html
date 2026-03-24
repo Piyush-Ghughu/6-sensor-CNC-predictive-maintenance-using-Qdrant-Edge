@@ -3,543 +3,424 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Qdrant Edge — Anomaly Detection</title>
+<title>CNC Edge AI — Predictive Maintenance</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#060810;--surface:#0b0f1a;--card:#0f1520;--card2:#131a28;
+  --border:#1a2235;--border2:#243050;
+  --accent:#3b82f6;--accent2:#60a5fa;
+  --green:#22c55e;--green-bg:#0a1f0f;--green-b:#16a34a44;
+  --red:#ef4444;--red-bg:#1a0808;--red-b:#dc262644;
+  --yellow:#f59e0b;--yellow-bg:#1a1200;--yellow-b:#d9770644;
+  --orange:#f97316;--purple:#a855f7;--cyan:#06b6d4;--pink:#ec4899;
+  --text:#f1f5f9;--text2:#94a3b8;--text3:#475569;--text4:#2d3748;
+  --mono:'JetBrains Mono',monospace;
+}
+html,body{height:100%;overflow:hidden;background:var(--bg)}
+body{color:var(--text);font-family:'Inter',system-ui,sans-serif;font-size:13px;display:flex;flex-direction:column}
 
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+/* TOPBAR */
+.topbar{height:46px;display:flex;align-items:center;gap:16px;padding:0 18px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0;z-index:100}
+.logo{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:700;letter-spacing:.3px;white-space:nowrap}
+.logo-icon{width:28px;height:28px;background:linear-gradient(135deg,#1d4ed8,#3b82f6);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:14px}
+.logo-sub{font-size:11px;font-weight:400;color:var(--text3);margin-left:4px;letter-spacing:.5px}
+.top-sep{width:1px;height:22px;background:var(--border)}
+.top-badge{font-size:10px;font-family:var(--mono);color:var(--text3);letter-spacing:.8px;padding:3px 8px;border:1px solid var(--border2);border-radius:3px}
+.top-right{margin-left:auto;display:flex;align-items:center;gap:10px}
+.clock{font-family:var(--mono);font-size:12px;color:var(--text2);letter-spacing:1.5px}
+.status-pill{display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:1px;border:1px solid}
+.status-pill.live{background:#081a0f;border-color:#16a34a44;color:var(--green)}
+.status-pill.off{background:#1a0808;border-color:#dc262644;color:var(--red)}
+.status-pill.warm{background:#1a1200;border-color:#d9770644;color:var(--yellow)}
+.pulse{width:6px;height:6px;border-radius:50%}
+.live .pulse{background:var(--green);animation:blink 1.2s ease infinite}
+.off .pulse{background:var(--red)}
+.warm .pulse{background:var(--yellow);animation:blink 1.2s ease infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
 
-:root {
-  --bg:        #080b10;
-  --surface:   #0d1117;
-  --card:      #111620;
-  --border:    #1c2333;
-  --border2:   #243050;
-  --accent:    #3b82f6;
-  --accent2:   #60a5fa;
-  --green:     #22c55e;
-  --green-dim: #16a34a33;
-  --red:       #ef4444;
-  --red-dim:   #dc262633;
-  --yellow:    #f59e0b;
-  --purple:    #a855f7;
-  --cyan:      #06b6d4;
-  --text:      #f1f5f9;
-  --text2:     #94a3b8;
-  --text3:     #475569;
-  --mono:      'JetBrains Mono', monospace;
-}
+/* LAYOUT */
+.layout{flex:1;display:grid;grid-template-columns:240px 1fr 260px;overflow:hidden;min-height:0}
 
-html, body { height: 100%; overflow: hidden; }
+/* LEFT */
+.left{border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;background:var(--surface)}
+.machine-status{padding:14px;border-bottom:1px solid var(--border)}
+.ms-box{padding:16px 14px;border-radius:8px;border:1px solid var(--border2);background:var(--card);text-align:center;transition:all .3s}
+.ms-box.normal{border-color:var(--green-b);background:var(--green-bg)}
+.ms-box.anomaly{border-color:var(--red-b);background:var(--red-bg);animation:glow-red .7s ease infinite alternate}
+.ms-box.warmup{border-color:var(--yellow-b);background:var(--yellow-bg)}
+@keyframes glow-red{from{box-shadow:0 0 6px #ef444420}to{box-shadow:0 0 22px #ef444445}}
+.ms-icon{font-size:24px;margin-bottom:6px}
+.ms-state{font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase}
+.ms-state.normal{color:var(--green)}
+.ms-state.anomaly{color:var(--red)}
+.ms-state.warmup{color:var(--yellow)}
+.ms-reason{font-family:var(--mono);font-size:9px;color:var(--text3);margin-top:4px;line-height:1.4;word-break:break-all}
 
-body {
-  background: var(--bg);
-  color: var(--text);
-  font-family: 'Inter', system-ui, sans-serif;
-  font-size: 13px;
-  display: flex;
-  flex-direction: column;
-}
+.sec{border-bottom:1px solid var(--border);padding:12px 14px}
+.sec:last-child{border-bottom:none;flex:1;overflow:hidden;display:flex;flex-direction:column}
+.sec-title{font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.sec-title::after{content:'';flex:1;height:1px;background:var(--border)}
 
-/* ── TOPBAR ──────────────────────────────────────────────────── */
-.topbar {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  padding: 0 20px;
-  height: 48px;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-  z-index: 10;
-}
+/* SENSOR GAUGES */
+.gauge-row{margin-bottom:10px}
+.gauge-row:last-child{margin-bottom:0}
+.gauge-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px}
+.g-name{font-size:11px;color:var(--text2)}
+.g-val{font-family:var(--mono);font-size:13px;font-weight:600}
+.g-unit{font-size:9px;color:var(--text3);margin-left:2px}
+.g-track{height:4px;background:var(--border);border-radius:2px;overflow:hidden;position:relative}
+.g-fill{height:100%;border-radius:2px;transition:width .4s ease,background .3s}
+.g-danger .g-fill{background:var(--red)!important}
 
-.topbar-logo {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: .3px;
-}
-.topbar-logo .dot {
-  width: 8px; height: 8px;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 8px var(--accent);
-}
-.topbar-logo span { color: var(--text2); font-weight: 400; margin-left: 2px; }
+/* KV */
+.kv{display:flex;flex-direction:column}
+.kvr{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border)}
+.kvr:last-child{border:none}
+.kk{font-size:10px;color:var(--text3)}
+.kv-val{font-family:var(--mono);font-size:11px;font-weight:500;color:var(--text2)}
+.kv-val.r{color:var(--red)}.kv-val.g{color:var(--green)}.kv-val.y{color:var(--yellow)}.kv-val.b{color:var(--accent2)}.kv-val.p{color:var(--purple)}.kv-val.c{color:var(--cyan)}
 
-.topbar-sep { width: 1px; height: 24px; background: var(--border); }
+/* EVENT LOG */
+#evlog{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:2px;padding-top:2px}
+#evlog::-webkit-scrollbar{width:3px}
+#evlog::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+.ev{padding:5px 8px;border-radius:4px;border-left:2px solid var(--border2);font-family:var(--mono);font-size:10px;background:var(--card);display:flex;flex-direction:column;gap:2px}
+.ev.a{border-left-color:var(--red);background:var(--red-bg)}
+.ev.c{border-left-color:var(--orange);background:#1a0d00}
+.ev-top{display:flex;align-items:center;gap:6px}
+.ev-step{color:var(--text3);min-width:30px}
+.ev-tag{font-size:9px;font-weight:700;letter-spacing:.5px;padding:1px 5px;border-radius:2px}
+.ev-tag.a{background:var(--red-b);color:var(--red)}
+.ev-tag.c{background:#f9731622;color:var(--orange)}
+.ev-tag.n{background:var(--border);color:var(--text3)}
+.ev-reason{color:var(--text3);font-size:9px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
-.topbar-tag {
-  font-size: 11px;
-  font-family: var(--mono);
-  color: var(--text3);
-  letter-spacing: .5px;
-}
+/* CENTER */
+.center{display:flex;flex-direction:column;overflow-y:auto;padding:14px;gap:12px;background:var(--bg)}
+.center::-webkit-scrollbar{width:4px}
+.center::-webkit-scrollbar-thumb{background:var(--border2)}
 
-.topbar-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+/* CHART CARD */
+.cc{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:14px}
+.cc-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.cc-title{font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--text3);display:flex;align-items:center;gap:6px}
+.cc-dot{width:7px;height:7px;border-radius:50%}
+.cc-val{font-family:var(--mono);font-size:14px;font-weight:600}
+.cc-unit{font-size:10px;color:var(--text3);margin-left:3px}
+.cc-badge{font-size:9px;font-weight:700;letter-spacing:.5px;padding:2px 7px;border-radius:3px}
+.cc-badge.ok{background:var(--green-bg);color:var(--green);border:1px solid var(--green-b)}
+.cc-badge.warn{background:var(--yellow-bg);color:var(--yellow);border:1px solid var(--yellow-b)}
+.cc-badge.crit{background:var(--red-bg);color:var(--red);border:1px solid var(--red-b)}
+.cc-badge.warm{background:#1a1200;color:var(--yellow);border:1px solid var(--yellow-b)}
 
-.live-pill {
-  display: flex; align-items: center; gap: 6px;
-  padding: 4px 10px;
-  border-radius: 4px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: .8px;
-  background: #0a1f12;
-  border: 1px solid #1a4a2a;
-  color: var(--green);
-}
-.live-pill .blink {
-  width: 6px; height: 6px; border-radius: 50%;
-  background: var(--green);
-  animation: blink 1.2s ease infinite;
-}
-.live-pill.off { background: #150a0a; border-color: #3a1a1a; color: var(--red); }
-.live-pill.off .blink { background: var(--red); animation: none; }
+/* ANOMALY SCORE BIG */
+.score-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 
-#system-time {
-  font-family: var(--mono);
-  font-size: 12px;
-  color: var(--text2);
-  letter-spacing: 1px;
-}
+/* RIGHT */
+.right{border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;background:var(--surface)}
 
-@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+/* NOTIFICATION PANEL */
+.notif-header{padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.notif-title{font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3)}
+.notif-count{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--red);background:var(--red-bg);border:1px solid var(--red-b);border-radius:3px;padding:1px 7px}
+#notif-list{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:0}
+#notif-list::-webkit-scrollbar{width:3px}
+#notif-list::-webkit-scrollbar-thumb{background:var(--border2)}
+.notif-item{padding:10px 14px;border-bottom:1px solid var(--border);cursor:default;transition:background .15s}
+.notif-item:hover{background:var(--card)}
+.notif-item.crit{border-left:3px solid var(--red)}
+.notif-item.warn{border-left:3px solid var(--yellow)}
+.ni-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+.ni-label{font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase}
+.ni-label.crit{color:var(--red)}
+.ni-label.warn{color:var(--yellow)}
+.ni-time{font-family:var(--mono);font-size:9px;color:var(--text3)}
+.ni-reason{font-size:10px;color:var(--text2);margin-bottom:3px;font-family:var(--mono)}
+.ni-score{font-size:9px;color:var(--text3)}
+.ni-step{font-size:9px;color:var(--text3)}
 
-/* ── MAIN GRID ───────────────────────────────────────────────── */
-.grid {
-  flex: 1;
-  display: grid;
-  grid-template-columns: 220px 1fr 200px;
-  gap: 0;
-  overflow: hidden;
-  min-height: 0;
-}
+/* STATS BOTTOM */
+.stats-grid{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--border)}
+.stat-cell{padding:12px 14px;border-right:1px solid var(--border);border-bottom:1px solid var(--border)}
+.stat-cell:nth-child(even){border-right:none}
+.stat-cell:nth-last-child(-n+2){border-bottom:none}
+.stat-label{font-size:9px;color:var(--text3);letter-spacing:.8px;text-transform:uppercase;margin-bottom:3px}
+.stat-val{font-family:var(--mono);font-size:18px;font-weight:700}
+.stat-val.r{color:var(--red)}.stat-val.g{color:var(--green)}.stat-val.y{color:var(--yellow)}.stat-val.b{color:var(--accent2)}
 
-/* ── LEFT PANEL ──────────────────────────────────────────────── */
-.left-panel {
-  border-right: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
+/* PRECISION RING */
+.prec-wrap{padding:14px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;align-items:center;gap:4px}
+.prec-ring{width:72px;height:72px;position:relative}
+.prec-ring svg{transform:rotate(-90deg)}
+.ring-bg{fill:none;stroke:var(--border);stroke-width:7}
+.ring-v{fill:none;stroke:var(--accent);stroke-width:7;stroke-linecap:round;transition:stroke-dashoffset .6s ease,stroke .4s}
+.prec-inner{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.prec-pct{font-family:var(--mono);font-size:15px;font-weight:700}
+.prec-sub{font-size:8px;color:var(--text3);letter-spacing:.5px}
 
-/* ── CENTER PANEL ────────────────────────────────────────────── */
-.center-panel {
-  display: flex;
-  flex-direction: column;
-  overflow-y: auto;
-  padding: 14px 16px;
-  gap: 12px;
-}
-.center-panel::-webkit-scrollbar { width: 4px; }
-.center-panel::-webkit-scrollbar-track { background: transparent; }
-.center-panel::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+/* LAST FAULT */
+.fault-box{margin:14px;padding:12px;border-radius:6px;border:1px solid var(--red-b);background:var(--red-bg)}
+.fault-title{font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--red);margin-bottom:8px}
+.fault-row{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--border)}
+.fault-row:last-child{border:none}
+.fk{font-size:10px;color:var(--text3)}
+.fv{font-family:var(--mono);font-size:10px;color:var(--text2)}
 
-/* ── RIGHT PANEL ─────────────────────────────────────────────── */
-.right-panel {
-  border-left: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-/* ── PANEL SECTION ───────────────────────────────────────────── */
-.section {
-  border-bottom: 1px solid var(--border);
-  padding: 12px 14px;
-}
-.section:last-child { border-bottom: none; flex: 1; overflow: hidden; display: flex; flex-direction: column; }
-
-.section-title {
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 1.2px;
-  text-transform: uppercase;
-  color: var(--text3);
-  margin-bottom: 10px;
-}
-
-/* ── STATUS BOX ──────────────────────────────────────────────── */
-.status-box {
-  margin: 0 14px 0;
-  padding: 14px;
-  border-radius: 6px;
-  text-align: center;
-  border: 1px solid var(--border2);
-  background: var(--card);
-  transition: all .25s;
-  margin-top: 14px;
-  margin-bottom: 12px;
-}
-.status-box.normal  { border-color: #1a4a2a; background: #0a160e; }
-.status-box.warmup  { border-color: #3a2e0a; background: #130f03; }
-.status-box.anomaly {
-  border-color: #5a1a1a;
-  background: #160608;
-  box-shadow: 0 0 20px #ef444422;
-  animation: pulse-red .8s ease infinite alternate;
-}
-@keyframes pulse-red {
-  from { box-shadow: 0 0 8px #ef444415; }
-  to   { box-shadow: 0 0 24px #ef444440; }
-}
-
-.status-label {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  margin-bottom: 4px;
-}
-.status-label.normal  { color: var(--green); }
-.status-label.warmup  { color: var(--yellow); }
-.status-label.anomaly { color: var(--red); }
-
-.status-reason {
-  font-family: var(--mono);
-  font-size: 10px;
-  color: var(--text3);
-  word-break: break-all;
-  line-height: 1.4;
-}
-
-/* ── SENSOR ROWS ─────────────────────────────────────────────── */
-.sensor-row {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-bottom: 10px;
-}
-.sensor-row:last-child { margin-bottom: 0; }
-
-.sensor-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-}
-.sensor-name  { font-size: 11px; color: var(--text2); }
-.sensor-val   {
-  font-family: var(--mono);
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text);
-}
-.sensor-unit  { font-size: 10px; color: var(--text3); margin-left: 2px; }
-
-.sensor-track {
-  height: 3px;
-  background: var(--border);
-  border-radius: 2px;
-  overflow: hidden;
-}
-.sensor-fill {
-  height: 100%;
-  border-radius: 2px;
-  transition: width .4s ease, background .3s;
-}
-
-/* ── KV TABLE ────────────────────────────────────────────────── */
-.kv { display: flex; flex-direction: column; gap: 0; }
-.kv-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 5px 0;
-  border-bottom: 1px solid var(--border);
-}
-.kv-row:last-child { border: none; }
-.kv-k { font-size: 11px; color: var(--text3); }
-.kv-v { font-family: var(--mono); font-size: 12px; font-weight: 500; color: var(--text2); }
-.kv-v.red    { color: var(--red); }
-.kv-v.green  { color: var(--green); }
-.kv-v.yellow { color: var(--yellow); }
-.kv-v.blue   { color: var(--accent2); }
-.kv-v.purple { color: var(--purple); }
-
-/* ── EVENT LOG ───────────────────────────────────────────────── */
-#event-log {
-  flex: 1;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-#event-log::-webkit-scrollbar { width: 3px; }
-#event-log::-webkit-scrollbar-thumb { background: var(--border2); }
-
-.ev {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 8px;
-  border-radius: 4px;
-  border-left: 2px solid transparent;
-  font-size: 11px;
-  font-family: var(--mono);
-  background: var(--card);
-}
-.ev.anomaly { border-color: var(--red);   background: #160608; }
-.ev.normal  { border-color: var(--border2); }
-.ev-step    { color: var(--text3); min-width: 34px; }
-.ev-tag     { font-weight: 600; font-size: 10px; letter-spacing: .5px; }
-.ev-tag.anomaly { color: var(--red); }
-.ev-tag.normal  { color: var(--text3); }
-.ev-reason  { color: var(--text3); font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-/* ── CHART CARD ──────────────────────────────────────────────── */
-.chart-card {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 12px 14px;
-}
-.chart-card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 10px;
-}
-.chart-title {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: .8px;
-  text-transform: uppercase;
-  color: var(--text3);
-}
-.chart-live-val {
-  font-family: var(--mono);
-  font-size: 13px;
-  font-weight: 500;
-}
-
-/* ── ANOMALY INDICATOR CHIP ──────────────────────────────────── */
-.chip {
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: .5px;
-  padding: 2px 7px;
-  border-radius: 3px;
-}
-.chip.anomaly { background: var(--red-dim);   color: var(--red);   border: 1px solid #ef444455; }
-.chip.normal  { background: var(--green-dim); color: var(--green); border: 1px solid #22c55e55; }
-.chip.warmup  { background: #f59e0b22;        color: var(--yellow);border: 1px solid #f59e0b55; }
-
-/* ── RIGHT PANEL MINI STATS ──────────────────────────────────── */
-.mini-stat {
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.mini-stat-label { font-size: 10px; color: var(--text3); letter-spacing: .5px; text-transform: uppercase; }
-.mini-stat-value { font-family: var(--mono); font-size: 20px; font-weight: 600; color: var(--text); }
-.mini-stat-value.red    { color: var(--red); }
-.mini-stat-value.green  { color: var(--green); }
-.mini-stat-value.yellow { color: var(--yellow); }
-.mini-stat-value.blue   { color: var(--accent2); }
-
-.precision-ring {
-  margin: 14px auto;
-  width: 80px; height: 80px;
-  position: relative;
-}
-.precision-ring svg { transform: rotate(-90deg); }
-.precision-ring .ring-bg  { fill: none; stroke: var(--border); stroke-width: 8; }
-.precision-ring .ring-val { fill: none; stroke: var(--accent); stroke-width: 8; stroke-linecap: round; transition: stroke-dashoffset .6s ease; }
-.precision-label {
-  position: absolute; inset: 0;
-  display: flex; flex-direction: column;
-  align-items: center; justify-content: center;
-}
-.precision-pct  { font-family: var(--mono); font-size: 16px; font-weight: 700; color: var(--text); }
-.precision-sub  { font-size: 9px; color: var(--text3); letter-spacing: .5px; }
+/* NOTIFICATION TOAST */
+#toast-container{position:fixed;top:54px;right:14px;z-index:999;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.toast{background:var(--card);border:1px solid var(--border2);border-radius:8px;padding:12px 16px;min-width:280px;max-width:340px;pointer-events:all;animation:slide-in .3s ease;box-shadow:0 8px 32px #00000088}
+.toast.crit{border-left:4px solid var(--red);border-color:var(--red-b)}
+.toast.warn{border-left:4px solid var(--yellow);border-color:var(--yellow-b)}
+@keyframes slide-in{from{transform:translateX(120%);opacity:0}to{transform:translateX(0);opacity:1}}
+@keyframes slide-out{from{transform:translateX(0);opacity:1}to{transform:translateX(120%);opacity:0}}
+.toast-head{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.toast-icon{font-size:16px}
+.toast-title{font-size:11px;font-weight:700;letter-spacing:.5px}
+.toast.crit .toast-title{color:var(--red)}
+.toast.warn .toast-title{color:var(--yellow)}
+.toast-body{font-size:11px;color:var(--text2);font-family:var(--mono)}
+.toast-meta{font-size:10px;color:var(--text3);margin-top:4px}
 
 </style>
 </head>
 <body>
 
-<!-- ── TOPBAR ──────────────────────────────────────────────────── -->
+<!-- TOPBAR -->
 <div class="topbar">
-  <div class="topbar-logo">
-    <div class="dot"></div>
-    QDRANT EDGE <span>/ Anomaly Detection</span>
+  <div class="logo">
+    <div class="logo-icon"></div>
+    CNC EDGE AI
+    <span class="logo-sub">PREDICTIVE MAINTENANCE</span>
   </div>
-  <div class="topbar-sep"></div>
-  <div class="topbar-tag">3-SENSOR · 12D VECTOR · COSINE SIM</div>
-  <div class="topbar-right">
-    <div id="system-time">--:--:--</div>
-    <div class="live-pill off" id="live-pill">
-      <div class="blink"></div>
-      <span id="live-text">CONNECTING</span>
+  <div class="top-sep"></div>
+  <div class="top-badge">QDRANT EDGE · 24D VECTORS · COSINE SIM</div>
+  <div class="top-sep"></div>
+  <div class="top-badge">6 INDUSTRIAL SENSORS</div>
+  <div class="top-right">
+    <span class="clock" id="clock">--:--:--</span>
+    <div class="status-pill off" id="pill">
+      <div class="pulse"></div>
+      <span id="pill-txt">OFFLINE</span>
     </div>
   </div>
 </div>
 
-<!-- ── MAIN GRID ────────────────────────────────────────────────── -->
-<div class="grid">
+<!-- LAYOUT -->
+<div class="layout">
 
-  <!-- LEFT PANEL -->
-  <div class="left-panel">
+  <!-- LEFT -->
+  <div class="left">
 
-    <!-- status -->
-    <div class="status-box warmup" id="status-box">
-      <div class="status-label warmup" id="status-label">WARMUP</div>
-      <div class="status-reason" id="status-reason">Collecting baseline…</div>
-    </div>
-
-    <!-- sensors -->
-    <div class="section">
-      <div class="section-title">Live Sensors</div>
-      <div class="sensor-row">
-        <div class="sensor-top">
-          <span class="sensor-name">Temperature</span>
-          <span><span class="sensor-val" id="sv-temp">—</span><span class="sensor-unit">°C</span></span>
-        </div>
-        <div class="sensor-track"><div class="sensor-fill" id="sf-temp" style="width:50%;background:var(--green)"></div></div>
-      </div>
-      <div class="sensor-row">
-        <div class="sensor-top">
-          <span class="sensor-name">Vibration</span>
-          <span><span class="sensor-val" id="sv-vib">—</span><span class="sensor-unit">g</span></span>
-        </div>
-        <div class="sensor-track"><div class="sensor-fill" id="sf-vib" style="width:15%;background:var(--cyan)"></div></div>
-      </div>
-      <div class="sensor-row">
-        <div class="sensor-top">
-          <span class="sensor-name">Pressure</span>
-          <span><span class="sensor-val" id="sv-pres">—</span><span class="sensor-unit">bar</span></span>
-        </div>
-        <div class="sensor-track"><div class="sensor-fill" id="sf-pres" style="width:50%;background:var(--yellow)"></div></div>
+    <div class="machine-status">
+      <div class="ms-box warmup" id="ms-box">
+        <div class="ms-icon" id="ms-icon"></div>
+        <div class="ms-state warmup" id="ms-state">WARMUP</div>
+        <div class="ms-reason" id="ms-reason">Collecting baseline…</div>
       </div>
     </div>
 
-    <!-- detection stats -->
-    <div class="section">
-      <div class="section-title">Detection</div>
+    <div class="sec">
+      <div class="sec-title">Live Sensors</div>
+      <div class="gauge-row" id="g-spindle">
+        <div class="gauge-top">
+          <span class="g-name">Spindle Current</span>
+          <span><span class="g-val" id="v-spindle">—</span><span class="g-unit">A</span></span>
+        </div>
+        <div class="g-track"><div class="g-fill" id="f-spindle" style="width:45%;background:#3b82f6"></div></div>
+      </div>
+      <div class="gauge-row" id="g-servo">
+        <div class="gauge-top">
+          <span class="g-name">Servo Torque</span>
+          <span><span class="g-val" id="v-servo">—</span><span class="g-unit">Nm</span></span>
+        </div>
+        <div class="g-track"><div class="g-fill" id="f-servo" style="width:45%;background:#a855f7"></div></div>
+      </div>
+      <div class="gauge-row" id="g-coolant">
+        <div class="gauge-top">
+          <span class="g-name">Coolant Flow</span>
+          <span><span class="g-val" id="v-coolant">—</span><span class="g-unit">L/min</span></span>
+        </div>
+        <div class="g-track"><div class="g-fill" id="f-coolant" style="width:85%;background:#06b6d4"></div></div>
+      </div>
+      <div class="gauge-row" id="g-acoustic">
+        <div class="gauge-top">
+          <span class="g-name">Acoustic Emission</span>
+          <span><span class="g-val" id="v-acoustic">—</span><span class="g-unit">kHz</span></span>
+        </div>
+        <div class="g-track"><div class="g-fill" id="f-acoustic" style="width:40%;background:#f59e0b"></div></div>
+      </div>
+      <div class="gauge-row" id="g-feed">
+        <div class="gauge-top">
+          <span class="g-name">Feed Rate Dev.</span>
+          <span><span class="g-val" id="v-feed">—</span><span class="g-unit">%</span></span>
+        </div>
+        <div class="g-track"><div class="g-fill" id="f-feed" style="width:10%;background:#22c55e"></div></div>
+      </div>
+      <div class="gauge-row" id="g-thermal">
+        <div class="gauge-top">
+          <span class="g-name">Thermal Gradient</span>
+          <span><span class="g-val" id="v-thermal">—</span><span class="g-unit">°C</span></span>
+        </div>
+        <div class="g-track"><div class="g-fill" id="f-thermal" style="width:20%;background:#f97316"></div></div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-title">Detection Stats</div>
       <div class="kv">
-        <div class="kv-row"><span class="kv-k">Step</span>         <span class="kv-v" id="kv-step">0</span></div>
-        <div class="kv-row"><span class="kv-k">Patterns in DB</span><span class="kv-v blue" id="kv-pat">0</span></div>
-        <div class="kv-row"><span class="kv-k">Similarity</span>   <span class="kv-v" id="kv-sim">—</span></div>
-        <div class="kv-row"><span class="kv-k">Anomaly Score</span><span class="kv-v purple" id="kv-asc">—</span></div>
-        <div class="kv-row"><span class="kv-k">Confidence</span>   <span class="kv-v" id="kv-conf">—</span></div>
+        <div class="kvr"><span class="kk">Step</span><span class="kv-val b" id="k-step">0</span></div>
+        <div class="kvr"><span class="kk">Patterns in Qdrant Edge</span><span class="kv-val b" id="k-pat">0</span></div>
+        <div class="kvr"><span class="kk">Similarity Score</span><span class="kv-val g" id="k-sim">—</span></div>
+        <div class="kvr"><span class="kk">Anomaly Score</span><span class="kv-val p" id="k-asc">—</span></div>
+        <div class="kvr"><span class="kk">Confidence</span><span class="kv-val y" id="k-conf">—</span></div>
       </div>
     </div>
 
-    <!-- event log -->
-    <div class="section">
-      <div class="section-title">Event Log</div>
-      <div id="event-log"></div>
+    <div class="sec">
+      <div class="sec-title">Event Log</div>
+      <div id="evlog"></div>
     </div>
 
   </div>
 
-  <!-- CENTER PANEL -->
-  <div class="center-panel">
+  <!-- CENTER -->
+  <div class="center">
 
-    <!-- anomaly score -->
-    <div class="chart-card">
-      <div class="chart-card-header">
-        <span class="chart-title" style="color:var(--purple)">Anomaly Score Timeline</span>
-        <span id="chip-status" class="chip warmup">WARMUP</span>
+    <!-- anomaly score + similarity side by side -->
+    <div class="score-row">
+      <div class="cc">
+        <div class="cc-head">
+          <div class="cc-title"><div class="cc-dot" style="background:var(--purple)"></div>Anomaly Score</div>
+          <span class="cc-badge warm" id="badge-score">WARMUP</span>
+        </div>
+        <canvas id="c-score" height="90"></canvas>
       </div>
-      <canvas id="c-score" height="100"></canvas>
+      <div class="cc">
+        <div class="cc-head">
+          <div class="cc-title"><div class="cc-dot" style="background:var(--cyan)"></div>Qdrant Similarity</div>
+          <span class="cc-val c" id="cv-sim">—</span>
+        </div>
+        <canvas id="c-sim" height="90"></canvas>
+      </div>
     </div>
 
-    <!-- temperature -->
-    <div class="chart-card">
-      <div class="chart-card-header">
-        <span class="chart-title">Temperature</span>
-        <span class="chart-live-val" id="cv-temp" style="color:#f97316">— °C</span>
+    <!-- spindle + servo -->
+    <div class="score-row">
+      <div class="cc">
+        <div class="cc-head">
+          <div class="cc-title"><div class="cc-dot" style="background:#3b82f6"></div>Spindle Current</div>
+          <span><span class="cc-val" id="cv-spindle" style="color:#3b82f6">—</span><span class="cc-unit">A</span></span>
+        </div>
+        <canvas id="c-spindle" height="80"></canvas>
       </div>
-      <canvas id="c-temp" height="72"></canvas>
+      <div class="cc">
+        <div class="cc-head">
+          <div class="cc-title"><div class="cc-dot" style="background:var(--purple)"></div>Servo Torque</div>
+          <span><span class="cc-val" id="cv-servo" style="color:var(--purple)">—</span><span class="cc-unit">Nm</span></span>
+        </div>
+        <canvas id="c-servo" height="80"></canvas>
+      </div>
     </div>
 
-    <!-- vibration -->
-    <div class="chart-card">
-      <div class="chart-card-header">
-        <span class="chart-title">Vibration</span>
-        <span class="chart-live-val" id="cv-vib" style="color:var(--cyan)">— g</span>
+    <!-- coolant + acoustic -->
+    <div class="score-row">
+      <div class="cc">
+        <div class="cc-head">
+          <div class="cc-title"><div class="cc-dot" style="background:var(--cyan)"></div>Coolant Flow</div>
+          <span><span class="cc-val" id="cv-coolant" style="color:var(--cyan)">—</span><span class="cc-unit">L/min</span></span>
+        </div>
+        <canvas id="c-coolant" height="80"></canvas>
       </div>
-      <canvas id="c-vib" height="72"></canvas>
+      <div class="cc">
+        <div class="cc-head">
+          <div class="cc-title"><div class="cc-dot" style="background:var(--yellow)"></div>Acoustic Emission</div>
+          <span><span class="cc-val" id="cv-acoustic" style="color:var(--yellow)">—</span><span class="cc-unit">kHz</span></span>
+        </div>
+        <canvas id="c-acoustic" height="80"></canvas>
+      </div>
     </div>
 
-    <!-- pressure -->
-    <div class="chart-card">
-      <div class="chart-card-header">
-        <span class="chart-title">Pressure</span>
-        <span class="chart-live-val" id="cv-pres" style="color:var(--yellow)">— bar</span>
+    <!-- feed deviation + thermal -->
+    <div class="score-row">
+      <div class="cc">
+        <div class="cc-head">
+          <div class="cc-title"><div class="cc-dot" style="background:var(--green)"></div>Feed Rate Deviation</div>
+          <span><span class="cc-val" id="cv-feed" style="color:var(--green)">—</span><span class="cc-unit">%</span></span>
+        </div>
+        <canvas id="c-feed" height="80"></canvas>
       </div>
-      <canvas id="c-pres" height="72"></canvas>
+      <div class="cc">
+        <div class="cc-head">
+          <div class="cc-title"><div class="cc-dot" style="background:var(--orange)"></div>Thermal Gradient</div>
+          <span><span class="cc-val" id="cv-thermal" style="color:var(--orange)">—</span><span class="cc-unit">°C</span></span>
+        </div>
+        <canvas id="c-thermal" height="80"></canvas>
+      </div>
     </div>
 
   </div>
 
-  <!-- RIGHT PANEL -->
-  <div class="right-panel">
+  <!-- RIGHT -->
+  <div class="right">
 
-    <div class="mini-stat">
-      <div class="mini-stat-label">Total Anomalies</div>
-      <div class="mini-stat-value red" id="ms-anomalies">0</div>
-    </div>
-    <div class="mini-stat">
-      <div class="mini-stat-label">True Positives</div>
-      <div class="mini-stat-value green" id="ms-tp">0</div>
-    </div>
-    <div class="mini-stat">
-      <div class="mini-stat-label">False Positives</div>
-      <div class="mini-stat-value yellow" id="ms-fp">0</div>
+    <div class="notif-header">
+      <span class="notif-title"> Alerts</span>
+      <span class="notif-count" id="notif-count">0</span>
     </div>
 
-    <!-- precision ring -->
-    <div class="section" style="align-items:center;border-bottom:1px solid var(--border)">
-      <div class="section-title" style="text-align:center">Precision</div>
-      <div class="precision-ring">
-        <svg viewBox="0 0 80 80" width="80" height="80">
-          <circle class="ring-bg"  cx="40" cy="40" r="32"/>
-          <circle class="ring-val" id="ring-val" cx="40" cy="40" r="32"
-            stroke-dasharray="201" stroke-dashoffset="201"/>
+    <div id="notif-list" style="flex:1;overflow-y:auto"></div>
+
+    <div class="prec-wrap" style="border-top:1px solid var(--border)">
+      <div class="prec-ring">
+        <svg viewBox="0 0 72 72" width="72" height="72">
+          <circle class="ring-bg" cx="36" cy="36" r="29"/>
+          <circle class="ring-v" id="ring-v" cx="36" cy="36" r="29" stroke-dasharray="182" stroke-dashoffset="182"/>
         </svg>
-        <div class="precision-label">
-          <div class="precision-pct" id="prec-pct">0%</div>
-          <div class="precision-sub">PRECISION</div>
+        <div class="prec-inner">
+          <div class="prec-pct" id="prec-pct">0%</div>
+          <div class="prec-sub">PRECISION</div>
         </div>
       </div>
     </div>
 
-    <!-- last anomaly -->
-    <div class="section" style="flex:1;overflow:hidden;display:flex;flex-direction:column">
-      <div class="section-title">Last Anomaly</div>
-      <div class="kv" style="flex:1">
-        <div class="kv-row"><span class="kv-k">Step</span>  <span class="kv-v red" id="la-step">—</span></div>
-        <div class="kv-row"><span class="kv-k">Score</span> <span class="kv-v red" id="la-score">—</span></div>
-        <div class="kv-row"><span class="kv-k">Temp</span>  <span class="kv-v" id="la-temp">—</span></div>
-        <div class="kv-row"><span class="kv-k">Vib</span>   <span class="kv-v" id="la-vib">—</span></div>
-        <div class="kv-row"><span class="kv-k">Pres</span>  <span class="kv-v" id="la-pres">—</span></div>
-        <div class="kv-row"><span class="kv-k">Type</span>  <span class="kv-v yellow" id="la-type">—</span></div>
-      </div>
+    <div class="stats-grid">
+      <div class="stat-cell"><div class="stat-label">Anomalies</div><div class="stat-val r" id="s-anom">0</div></div>
+      <div class="stat-cell"><div class="stat-label">True Pos.</div><div class="stat-val g" id="s-tp">0</div></div>
+      <div class="stat-cell"><div class="stat-label">False Pos.</div><div class="stat-val y" id="s-fp">0</div></div>
+      <div class="stat-cell"><div class="stat-label">Patterns</div><div class="stat-val b" id="s-pat">0</div></div>
+    </div>
+
+    <div class="fault-box" id="fault-box" style="display:none">
+      <div class="fault-title"> Last Fault Detected</div>
+      <div class="fault-row"><span class="fk">Step</span><span class="fv" id="f-step">—</span></div>
+      <div class="fault-row"><span class="fk">Type</span><span class="fv" id="f-type">—</span></div>
+      <div class="fault-row"><span class="fk">Score</span><span class="fv" id="f-score">—</span></div>
+      <div class="fault-row"><span class="fk">Spindle</span><span class="fv" id="f-spindle-v">—</span></div>
+      <div class="fault-row"><span class="fk">Acoustic</span><span class="fv" id="f-acoustic-v">—</span></div>
+      <div class="fault-row"><span class="fk">Thermal</span><span class="fv" id="f-thermal-v">—</span></div>
     </div>
 
   </div>
 
 </div>
+
+<!-- TOAST CONTAINER -->
+<div id="toast-container"></div>
 
 <script>
-// ── clock ─────────────────────────────────────────────────────────
+//  clock 
 setInterval(() => {
-  document.getElementById('system-time').textContent =
-    new Date().toLocaleTimeString('en-GB', {hour12:false});
+  document.getElementById('clock').textContent =
+    new Date().toLocaleTimeString('en-GB',{hour12:false});
 }, 1000);
 
-// ── chart factory ─────────────────────────────────────────────────
+//  chart factory 
 const MAX = 200;
 
-function mkChart(id, color, fill, minY, maxY) {
+function makeChart(id, lineColor, minY, maxY, fillColor) {
   const ctx = document.getElementById(id).getContext('2d');
   return new Chart(ctx, {
     type: 'line',
@@ -547,43 +428,41 @@ function mkChart(id, color, fill, minY, maxY) {
       labels: [],
       datasets: [
         {
-          data: [], borderColor: color,
-          backgroundColor: fill ? color+'18' : 'transparent',
-          borderWidth: 1.5, pointRadius: 0, fill, tension: 0.3,
+          data: [], borderColor: lineColor,
+          backgroundColor: fillColor || lineColor + '18',
+          borderWidth: 1.5, pointRadius: 0, fill: true, tension: 0.35,
         },
         {
-          data: [], borderColor: 'transparent',
-          backgroundColor: 'transparent',
-          pointRadius: 4, pointBackgroundColor: '#ef4444',
-          pointBorderColor: '#ef4444',
-          showLine: false, fill: false,
+          data: [], showLine: false, fill: false,
+          pointRadius: 5, pointBackgroundColor: '#ef4444',
+          pointBorderColor: '#ef444488', pointBorderWidth: 2,
+          borderColor: 'transparent', backgroundColor: 'transparent',
         }
       ]
     },
     options: {
       animation: false, responsive: true, maintainAspectRatio: true,
-      plugins: {
-        legend: { display: false },
+      plugins: { legend: {display:false},
         tooltip: {
-          backgroundColor: '#111620', borderColor: '#1c2333', borderWidth: 1,
-          titleColor: '#475569', bodyColor: '#f1f5f9',
-          callbacks: { title: (items) => `Step ${items[0].label}` }
+          backgroundColor:'#0f1520', borderColor:'#1a2235', borderWidth:1,
+          titleColor:'#475569', bodyColor:'#f1f5f9',
+          callbacks: { title: i => `Step ${i[0].label}` }
         }
       },
       scales: {
         x: { display: false },
         y: {
           min: minY, max: maxY,
-          grid: { color: '#1c233388' },
-          ticks: { color: '#475569', font: { size: 10, family: 'JetBrains Mono' }, maxTicksLimit: 4 },
-          border: { color: '#1c2333' }
+          grid: { color: '#1a223588' },
+          ticks: { color:'#475569', font:{size:9,family:'JetBrains Mono'}, maxTicksLimit:4 },
+          border: { color:'#1a2235' }
         }
       }
     }
   });
 }
 
-function mkScoreChart(id) {
+function makeScoreChart(id, color) {
   const ctx = document.getElementById(id).getContext('2d');
   return new Chart(ctx, {
     type: 'line',
@@ -591,185 +470,283 @@ function mkScoreChart(id) {
       labels: [],
       datasets: [
         {
-          data: [], borderColor: '#a855f7',
-          backgroundColor: (c) => {
-            const { ctx: cx, chartArea: ca } = c.chart;
-            if (!ca) return '#a855f714';
-            const g = cx.createLinearGradient(0, ca.top, 0, ca.bottom);
-            g.addColorStop(0, '#a855f730'); g.addColorStop(1, '#a855f705');
+          data: [], borderColor: color, borderWidth: 2,
+          pointRadius: 0, fill: true, tension: 0.35,
+          backgroundColor: c => {
+            const {ctx:cx, chartArea:ca} = c.chart;
+            if (!ca) return color+'18';
+            const g = cx.createLinearGradient(0,ca.top,0,ca.bottom);
+            g.addColorStop(0, color+'40'); g.addColorStop(1, color+'05');
             return g;
-          },
-          borderWidth: 2, pointRadius: 0, fill: true, tension: 0.3,
+          }
         },
         {
-          data: [], borderColor: 'transparent', backgroundColor: 'transparent',
+          data: [], showLine: false, fill: false,
           pointRadius: 5, pointBackgroundColor: '#ef4444',
           pointBorderColor: '#ef444488', pointBorderWidth: 2,
-          showLine: false, fill: false,
+          borderColor:'transparent', backgroundColor:'transparent',
         }
       ]
     },
     options: {
       animation: false, responsive: true, maintainAspectRatio: true,
-      plugins: {
-        legend: { display: false },
+      plugins: { legend:{display:false},
         tooltip: {
-          backgroundColor: '#111620', borderColor: '#1c2333', borderWidth: 1,
-          titleColor: '#475569', bodyColor: '#f1f5f9',
+          backgroundColor:'#0f1520', borderColor:'#1a2235', borderWidth:1,
+          titleColor:'#475569', bodyColor:'#f1f5f9',
         }
       },
       scales: {
-        x: { display: false },
+        x: { display:false },
         y: {
-          min: 0, max: 1,
-          grid: { color: '#2a103888' },
-          ticks: { color: '#7c3aed', font: { size: 10, family: 'JetBrains Mono' }, maxTicksLimit: 4 },
-          border: { color: '#1c2333' }
+          min:0, max:1,
+          grid:{color:'#1a223588'},
+          ticks:{color:'#475569',font:{size:9,family:'JetBrains Mono'},maxTicksLimit:4},
+          border:{color:'#1a2235'}
         }
       }
     }
   });
 }
 
-function push(chart, step, val, anomalyVal) {
+const C = {
+  score:    makeScoreChart('c-score',   '#a855f7'),
+  sim:      makeScoreChart('c-sim',     '#06b6d4'),
+  spindle:  makeChart('c-spindle',  '#3b82f6',  2,  15),
+  servo:    makeChart('c-servo',    '#a855f7',  5,  40),
+  coolant:  makeChart('c-coolant',  '#06b6d4',  0,  10),
+  acoustic: makeChart('c-acoustic', '#f59e0b',  30, 160),
+  feed:     makeChart('c-feed',     '#22c55e',  0,  6),
+  thermal:  makeChart('c-thermal',  '#f97316',  0,  18),
+};
+
+function push(chart, step, val, anomVal) {
   const d = chart.data;
   d.labels.push(step);
   d.datasets[0].data.push(val);
-  d.datasets[1].data.push(anomalyVal !== null ? anomalyVal : null);
-  if (d.labels.length > MAX) { d.labels.shift(); d.datasets.forEach(ds => ds.data.shift()); }
+  d.datasets[1].data.push(anomVal !== null ? anomVal : null);
+  if (d.labels.length > MAX) { d.labels.shift(); d.datasets.forEach(ds=>ds.data.shift()); }
   chart.update('none');
 }
 
-const charts = {
-  score: mkScoreChart('c-score'),
-  temp:  mkChart('c-temp',  '#f97316', true,  40, 90),
-  vib:   mkChart('c-vib',   '#06b6d4', true,  0,  12),
-  pres:  mkChart('c-pres',  '#f59e0b', true,  0.85, 1.6),
-};
-
-// ── helpers ───────────────────────────────────────────────────────
-function $id(id) { return document.getElementById(id); }
-function pct(v, lo, hi) { return Math.max(0, Math.min(100, (v-lo)/(hi-lo)*100)).toFixed(1) + '%'; }
-
-function updateSensor(name, val, lo, hi, okColor, formatted) {
-  const danger =
-    name === 'temp' ? val > 65 || val < 25 :
-    name === 'vib'  ? val > 4.0 :
-    val < 0.95 || val > 1.4;
-  $id('sv-' + name).textContent = formatted;
-  const fill = $id('sf-' + name);
-  fill.style.width = pct(val, lo, hi);
-  fill.style.background = danger ? 'var(--red)' : okColor;
+//  gauge update 
+function gauge(key, val, lo, hi, okColor, formatted, dangerCond) {
+  document.getElementById('v-'+key).textContent = formatted;
+  const fill  = document.getElementById('f-'+key);
+  const row   = document.getElementById('g-'+key);
+  const pct   = Math.max(0, Math.min(100, (val-lo)/(hi-lo)*100)).toFixed(1)+'%';
+  fill.style.width = pct;
+  if (dangerCond) {
+    fill.style.background = 'var(--red)';
+    row.classList.add('g-danger');
+  } else {
+    fill.style.background = okColor;
+    row.classList.remove('g-danger');
+  }
 }
 
-function updateStatus(r) {
-  const box = $id('status-box');
-  const lbl = $id('status-label');
-  const rsn = $id('status-reason');
-  const chp = $id('chip-status');
+//  machine status 
+function setStatus(r) {
+  const box   = document.getElementById('ms-box');
+  const state = document.getElementById('ms-state');
+  const icon  = document.getElementById('ms-icon');
+  const rsn   = document.getElementById('ms-reason');
+  const badge = document.getElementById('badge-score');
 
   if (r.reason.startsWith('WARMUP')) {
-    box.className = 'status-box warmup';
-    lbl.className = 'status-label warmup';
-    lbl.textContent = 'WARMUP';
-    chp.className = 'chip warmup'; chp.textContent = 'WARMUP';
+    box.className='ms-box warmup'; state.className='ms-state warmup';
+    state.textContent='WARMUP'; icon.textContent='';
+    badge.className='cc-badge warm'; badge.textContent='WARMUP';
   } else if (r.is_anomaly) {
-    box.className = 'status-box anomaly';
-    lbl.className = 'status-label anomaly';
-    lbl.textContent = 'ANOMALY';
-    chp.className = 'chip anomaly'; chp.textContent = 'ANOMALY';
+    box.className='ms-box anomaly'; state.className='ms-state anomaly';
+    state.textContent='FAULT DETECTED'; icon.textContent='';
+    badge.className='cc-badge crit'; badge.textContent='ANOMALY';
   } else {
-    box.className = 'status-box normal';
-    lbl.className = 'status-label normal';
-    lbl.textContent = 'NORMAL';
-    chp.className = 'chip normal'; chp.textContent = 'NORMAL';
+    box.className='ms-box normal'; state.className='ms-state normal';
+    state.textContent='NORMAL'; icon.textContent='';
+    badge.className='cc-badge ok'; badge.textContent='NORMAL';
   }
   rsn.textContent = r.reason;
 }
 
+//  event log 
 function addEvent(r) {
-  const log  = $id('event-log');
-  const el   = document.createElement('div');
-  el.className = 'ev ' + (r.is_anomaly ? 'anomaly' : 'normal');
+  const log = document.getElementById('evlog');
+  const el  = document.createElement('div');
+  const isCrit = r.anomaly_score > 0.5;
+  el.className = 'ev' + (r.is_anomaly ? (isCrit ? ' c' : ' a') : '');
   el.innerHTML =
-    `<span class="ev-step">#${r.step}</span>` +
-    `<span class="ev-tag ${r.is_anomaly ? 'anomaly' : 'normal'}">${r.is_anomaly ? 'ANOM' : 'norm'}</span>` +
-    `<span class="ev-reason">${r.reason}</span>`;
+    `<div class="ev-top">
+       <span class="ev-step">#${r.step}</span>
+       <span class="ev-tag ${r.is_anomaly?(isCrit?'c':'a'):'n'}">${r.is_anomaly?(isCrit?'CRIT':'ANOM'):'ok'}</span>
+       <span class="ev-reason">${r.reason}</span>
+     </div>`;
   log.insertBefore(el, log.firstChild);
-  while (log.children.length > 100) log.lastChild.remove();
+  while (log.children.length > 80) log.lastChild.remove();
 }
 
-function updatePrecision(tp, total) {
-  const p = total ? tp / total : 0;
-  $id('prec-pct').textContent = (p * 100).toFixed(0) + '%';
-  const circ = 2 * Math.PI * 32;
-  $id('ring-val').setAttribute('stroke-dashoffset', (circ * (1 - p)).toFixed(1));
-  $id('ring-val').style.stroke =
+//  precision ring 
+function updatePrec(tp, total) {
+  const p = total ? tp/total : 0;
+  const circ = 2*Math.PI*29;
+  document.getElementById('prec-pct').textContent = (p*100).toFixed(0)+'%';
+  document.getElementById('ring-v').setAttribute('stroke-dashoffset', (circ*(1-p)).toFixed(1));
+  document.getElementById('ring-v').style.stroke =
     p > 0.7 ? 'var(--green)' : p > 0.4 ? 'var(--yellow)' : 'var(--red)';
 }
 
-// ── polling ───────────────────────────────────────────────────────
+//  toast notification 
+let _shownAlerts = new Set();
+function showToast(alert) {
+  if (_shownAlerts.has(alert.id)) return;
+  _shownAlerts.add(alert.id);
+
+  const container = document.getElementById('toast-container');
+  const t = document.createElement('div');
+  t.className = 'toast ' + (alert.severity === 'CRITICAL' ? 'crit' : 'warn');
+  t.innerHTML = `
+    <div class="toast-head">
+      <span class="toast-title">${alert.severity} — ${(alert.label||'ANOMALY').replace(/_/g,' ')}</span>
+    </div>
+    <div class="toast-body" style="margin-top:4px;line-height:1.6">${alert.reason}</div>
+    <div class="toast-meta" style="margin-top:5px;display:flex;gap:12px">
+      <span>Score: <b style="color:${alert.severity==='CRITICAL'?'#ef4444':'#f59e0b'}">${alert.score.toFixed(4)}</b></span>
+      <span>Step #${alert.step}</span>
+      <span>${alert.time}</span>
+    </div>`;
+  container.appendChild(t);
+  setTimeout(() => {
+    t.style.animation = 'slide-out .3s ease forwards';
+    setTimeout(() => t.remove(), 300);
+  }, 4000);
+}
+
+//  right panel notification list 
+let _renderedAlerts = new Set();
+function renderAlerts(alerts) {
+  const list = document.getElementById('notif-list');
+  document.getElementById('notif-count').textContent = alerts.length;
+  alerts.slice().reverse().forEach(a => {
+    if (_renderedAlerts.has(a.id)) return;
+    _renderedAlerts.add(a.id);
+    const isCrit = a.severity === 'CRITICAL';
+    const el = document.createElement('div');
+    el.className = 'notif-item ' + (isCrit ? 'crit' : 'warn');
+    const sensorVals = a.spindle ? `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 8px;margin-top:5px;font-family:var(--mono);font-size:9px;color:var(--text3)">
+        <span>Spindle: <b style="color:var(--text2)">${a.spindle?.toFixed(2)} A</b></span>
+        <span>Servo: <b style="color:var(--text2)">${a.servo?.toFixed(2)} Nm</b></span>
+        <span>Coolant: <b style="color:var(--text2)">${a.coolant?.toFixed(2)} L/min</b></span>
+        <span>Acoustic: <b style="color:var(--text2)">${a.acoustic?.toFixed(1)} kHz</b></span>
+        <span>Thermal: <b style="color:var(--text2)">${a.thermal?.toFixed(2)} C</b></span>
+        <span>Step: <b style="color:var(--text2)">#${a.step}</b></span>
+      </div>` : '';
+    el.innerHTML = `
+      <div class="ni-top">
+        <span class="ni-label ${isCrit?'crit':'warn'}">${(a.label||'ANOMALY').replace(/_/g,' ')}</span>
+        <span class="ni-time">${a.time}</span>
+      </div>
+      <div class="ni-reason" style="margin-top:4px;line-height:1.5">${a.reason}</div>
+      <div class="ni-score" style="margin-top:3px">Anomaly Score: <b style="color:${isCrit?'var(--red)':'var(--yellow)'}">${a.score.toFixed(4)}</b></div>
+      ${sensorVals}`;
+    list.insertBefore(el, list.firstChild);
+    showToast(a);
+  });
+}
+
+//  last fault panel 
+function updateFault(r) {
+  document.getElementById('fault-box').style.display = 'block';
+  document.getElementById('f-step').textContent     = r.step;
+  document.getElementById('f-type').textContent     = (r.gt_label||r.reason.split('(')[0]).replace(/_/g,' ').toUpperCase();
+  document.getElementById('f-score').textContent    = r.anomaly_score.toFixed(4);
+  document.getElementById('f-spindle-v').textContent = r.spindle_current.toFixed(2) + ' A';
+  document.getElementById('f-acoustic-v').textContent = r.acoustic_emission.toFixed(1) + ' kHz';
+  document.getElementById('f-thermal-v').textContent = r.thermal_gradient.toFixed(2) + ' °C';
+}
+
+//  polling 
 let lastStep = -1;
-let stats = { anomalies: 0, tp: 0, fp: 0 };
+let stats = {anom:0, tp:0, fp:0};
 
 function processPoint(r) {
   if (r.step <= lastStep) return;
   lastStep = r.step;
 
-  push(charts.score, r.step, r.anomaly_score, r.is_anomaly ? r.anomaly_score : null);
-  push(charts.temp,  r.step, r.temperature,   r.is_anomaly ? r.temperature   : null);
-  push(charts.vib,   r.step, r.vibration,     r.is_anomaly ? r.vibration     : null);
-  push(charts.pres,  r.step, r.pressure,      r.is_anomaly ? r.pressure      : null);
+  const anom = r.is_anomaly ? r.anomaly_score : null;
+  push(C.score,    r.step, r.anomaly_score,      anom);
+  push(C.sim,      r.step, r.similarity,          anom !== null ? r.similarity : null);
+  push(C.spindle,  r.step, r.spindle_current,     anom);
+  push(C.servo,    r.step, r.servo_torque,        anom);
+  push(C.coolant,  r.step, r.coolant_flow,        anom);
+  push(C.acoustic, r.step, r.acoustic_emission,   anom);
+  push(C.feed,     r.step, r.feed_rate_deviation, anom);
+  push(C.thermal,  r.step, r.thermal_gradient,    anom);
 
-  updateSensor('temp', r.temperature, 20, 90,  'var(--green)',  r.temperature.toFixed(1));
-  updateSensor('vib',  r.vibration,   0,  10,  'var(--cyan)',   r.vibration.toFixed(3));
-  updateSensor('pres', r.pressure,    0.8,1.6, 'var(--yellow)', r.pressure.toFixed(4));
+  // gauges
+  gauge('spindle',  r.spindle_current,     2,  15,  '#3b82f6', r.spindle_current.toFixed(2),  r.spindle_current > 8);
+  gauge('servo',    r.servo_torque,        5,  40,  '#a855f7', r.servo_torque.toFixed(2),      r.servo_torque > 25);
+  gauge('coolant',  r.coolant_flow,        0,  10,  '#06b6d4', r.coolant_flow.toFixed(2),      r.coolant_flow < 3);
+  gauge('acoustic', r.acoustic_emission,   30, 160, '#f59e0b', r.acoustic_emission.toFixed(1), r.acoustic_emission > 90);
+  gauge('feed',     r.feed_rate_deviation, 0,  6,   '#22c55e', r.feed_rate_deviation.toFixed(3),r.feed_rate_deviation > 2);
+  gauge('thermal',  r.thermal_gradient,    0,  18,  '#f97316', r.thermal_gradient.toFixed(2),  r.thermal_gradient > 8);
 
-  $id('cv-temp').textContent = r.temperature.toFixed(1) + ' °C';
-  $id('cv-vib').textContent  = r.vibration.toFixed(3) + ' g';
-  $id('cv-pres').textContent = r.pressure.toFixed(4) + ' bar';
+  // live vals in charts
+  document.getElementById('cv-spindle').textContent  = r.spindle_current.toFixed(2);
+  document.getElementById('cv-servo').textContent    = r.servo_torque.toFixed(2);
+  document.getElementById('cv-coolant').textContent  = r.coolant_flow.toFixed(2);
+  document.getElementById('cv-acoustic').textContent = r.acoustic_emission.toFixed(1);
+  document.getElementById('cv-feed').textContent     = r.feed_rate_deviation.toFixed(3);
+  document.getElementById('cv-thermal').textContent  = r.thermal_gradient.toFixed(2);
+  document.getElementById('cv-sim').textContent      = r.similarity.toFixed(4);
 
-  $id('kv-step').textContent = r.step;
-  $id('kv-pat').textContent  = r.pattern_count;
-  $id('kv-sim').textContent  = r.similarity.toFixed(4);
-  $id('kv-asc').textContent  = r.anomaly_score.toFixed(4);
-  $id('kv-conf').textContent = r.confidence.toFixed(3);
+  // stats panel
+  document.getElementById('k-step').textContent = r.step;
+  document.getElementById('k-pat').textContent  = r.pattern_count;
+  document.getElementById('k-sim').textContent  = r.similarity.toFixed(4);
+  document.getElementById('k-asc').textContent  = r.anomaly_score.toFixed(4);
+  document.getElementById('k-conf').textContent = r.confidence.toFixed(3);
 
   if (r.is_anomaly) {
-    stats.anomalies++;
+    stats.anom++;
     if (r.ground_truth) stats.tp++; else stats.fp++;
-    $id('la-step').textContent  = r.step;
-    $id('la-score').textContent = r.anomaly_score.toFixed(4);
-    $id('la-temp').textContent  = r.temperature.toFixed(1) + ' °C';
-    $id('la-vib').textContent   = r.vibration.toFixed(3) + ' g';
-    $id('la-pres').textContent  = r.pressure.toFixed(4) + ' bar';
-    $id('la-type').textContent  = r.gt_label || r.reason.split('(')[0];
+    updateFault(r);
   }
 
-  $id('ms-anomalies').textContent = stats.anomalies;
-  $id('ms-tp').textContent        = stats.tp;
-  $id('ms-fp').textContent        = stats.fp;
-  updatePrecision(stats.tp, stats.anomalies);
-
-  updateStatus(r);
-  if (r.is_anomaly || r.step % 15 === 0) addEvent(r);
+  document.getElementById('s-anom').textContent = stats.anom;
+  document.getElementById('s-tp').textContent   = stats.tp;
+  document.getElementById('s-fp').textContent   = stats.fp;
+  document.getElementById('s-pat').textContent  = r.pattern_count;
+  updatePrec(stats.tp, stats.anom);
+  setStatus(r);
+  if (r.is_anomaly || r.step % 20 === 0) addEvent(r);
 }
 
-async function poll() {
-  const pill = $id('live-pill');
-  const txt  = $id('live-text');
+async function pollData() {
+  const pill = document.getElementById('pill');
+  const txt  = document.getElementById('pill-txt');
   try {
     const res  = await fetch('/data');
     const data = await res.json();
-    pill.className = 'live-pill'; txt.textContent = 'LIVE';
+    pill.className = 'status-pill live'; txt.textContent = 'LIVE';
     data.forEach(processPoint);
   } catch {
-    pill.className = 'live-pill off'; txt.textContent = 'OFFLINE';
+    pill.className = 'status-pill off'; txt.textContent = 'OFFLINE';
   }
-  setTimeout(poll, 500);
+  setTimeout(pollData, 500);
 }
 
-poll();
+async function pollAlerts() {
+  try {
+    const res    = await fetch('/alerts');
+    const alerts = await res.json();
+    renderAlerts(alerts);
+  } catch {}
+  setTimeout(pollAlerts, 800);
+}
+
+pollData();
+pollAlerts();
 </script>
 </body>
 </html>
