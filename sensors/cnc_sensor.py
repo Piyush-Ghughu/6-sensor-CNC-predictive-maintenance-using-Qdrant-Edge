@@ -67,7 +67,7 @@ class CNCMachineSimulator:
         self._step += 1
         self._t    += 0.1
 
-        # ── baseline healthy machine ──────────────────────────────────
+       
         spindle = (
             4.5
             + 0.3  * math.sin(2 * math.pi * self._t / 1.5)
@@ -104,7 +104,7 @@ class CNCMachineSimulator:
         is_anomaly = False
         label      = None
 
-        # ── random fault injection ────────────────────────────────────
+       
         self._maybe_start_fault()
 
         if self._active_fault:

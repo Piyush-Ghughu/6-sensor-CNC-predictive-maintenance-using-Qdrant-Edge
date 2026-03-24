@@ -40,7 +40,7 @@ class AnomalyDetector:
         self._step     = 0
         self._history  = deque(maxlen=config.BASELINE_WINDOW)
 
-    # ------------------------------------------------------------------
+  
     def _spike_check(self, score: float) -> tuple[bool, float]:
         """Z-score spike detection on rolling anomaly score history."""
         if len(self._history) < 10:
@@ -53,7 +53,6 @@ class AnomalyDetector:
         z = (score - mean) / std
         return z > config.SPIKE_Z_SCORE, min(1.0, z / (config.SPIKE_Z_SCORE * 2))
 
-    # ------------------------------------------------------------------
     def process(self, vector: np.ndarray, reading) -> AnomalyResult:
         self._step += 1
 
@@ -63,7 +62,7 @@ class AnomalyDetector:
         spike, spike_conf = self._spike_check(anomaly_score)
         self._history.append(anomaly_score)
 
-        # --- WARMUP: just store every vector as a "normal" baseline ---
+       
         # extract CNC fields if available
         is_cnc = hasattr(reading, 'spindle_current')
         extras = dict(

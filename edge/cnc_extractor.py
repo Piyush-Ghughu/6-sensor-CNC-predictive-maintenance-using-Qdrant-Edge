@@ -10,11 +10,7 @@ WINDOW = 10
 
 
 class CNCFeatureExtractor:
-    """
-    Online feature extraction for 6 CNC sensors.
-    Uses Welford's algorithm for running normalization — no batch needed.
-    Produces a 24-dim L2-normalized vector for Qdrant Edge cosine search.
-    """
+
 
     SENSORS = [
         ("spindle",   4.5,   0.3),

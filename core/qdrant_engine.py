@@ -52,7 +52,7 @@ class QdrantEdgeEngine:
         self._count = 0        # patterns stored so far
         self._id_counter = 0   # monotonic integer IDs (EdgeShard requires uint)
 
-    # ------------------------------------------------------------------
+
     def store(self, vector: np.ndarray) -> None:
         """Store a learned normal-pattern vector."""
         self._id_counter += 1
@@ -63,7 +63,7 @@ class QdrantEdgeEngine:
         self._shard.update(UpdateOperation.upsert_points([point]))
         self._count += 1
 
-    # ------------------------------------------------------------------
+
     def search(self, vector: np.ndarray, top_k: int = 5) -> float:
         """
         Find the most similar stored pattern.
@@ -82,10 +82,10 @@ class QdrantEdgeEngine:
         if not results:
             return 0.0
 
-        # Cosine similarity is in [-1, 1]; Qdrant Edge returns it in [0, 1]
+        
         return float(results[0].score)
 
-    # ------------------------------------------------------------------
+
     def flush(self) -> None:
         self._shard.flush()
 
