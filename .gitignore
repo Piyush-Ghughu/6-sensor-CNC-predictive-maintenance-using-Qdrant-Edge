@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+*.pyo
+.python-version
+.venv/
+.uv/
+uv.lock
+*.egg-info/
+dist/
+build/
+qdrant_edge_shard/
+qdrant_edge_db/
+.env
