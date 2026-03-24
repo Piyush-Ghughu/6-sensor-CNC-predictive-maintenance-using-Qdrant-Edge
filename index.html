@@ -555,8 +555,8 @@ function setStatus(r) {
 
   if (r.reason.startsWith('WARMUP')) {
     box.className='ms-box warmup'; state.className='ms-state warmup';
-    state.textContent='WARMUP'; icon.textContent='';
-    badge.className='cc-badge warm'; badge.textContent='WARMUP';
+    state.textContent='TRAINING'; icon.textContent='';
+    badge.className='cc-badge warm'; badge.textContent='TRAINING';
   } else if (r.is_anomaly) {
     box.className='ms-box anomaly'; state.className='ms-state anomaly';
     state.textContent='FAULT DETECTED'; icon.textContent='';

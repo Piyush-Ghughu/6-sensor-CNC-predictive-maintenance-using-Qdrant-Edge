@@ -39,17 +39,26 @@ _FAULT_PROB = 0.0008  # ~0.08% per step = roughly 1 fault every 1250 steps (~2 m
 
 class CNCMachineSimulator:
 
-    def __init__(self, seed: int = 42):
+    def __init__(self, seed: int = 42, training_mode: bool = False):
         random.seed(seed)
-        self._step        = 0
-        self._t           = 0.0
+        self._step          = 0
+        self._t             = 0.0
         self._active_fault: Optional[str] = None
-        self._fault_step  = 0   # how many steps into current fault
+        self._fault_step    = 0
+        self.training_mode  = training_mode   # True = no faults, pure normal data
+
+    def set_training_mode(self, value: bool):
+        self.training_mode = value
+        if value:
+            self._active_fault = None
+            self._fault_step   = 0
 
     def _maybe_start_fault(self):
         """Randomly decide if a new fault starts this step."""
+        if self.training_mode:
+            return   # no faults during training
         if self._active_fault:
-            return   # already in a fault
+            return
         if random.random() < _FAULT_PROB:
             self._active_fault = random.choice(list(_FAULTS.keys()))
             self._fault_step   = 0

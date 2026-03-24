@@ -58,7 +58,7 @@ def _store(reading: CNCReading, result, pattern_count: int):
         # notification alert
         if result.is_anomaly:
             alert = {
-                "id":        len(_alerts),
+                "id":        int(result.step),
                 "step":      int(result.step),
                 "time":      time.strftime("%H:%M:%S"),
                 "reason":    str(result.reason),
@@ -72,7 +72,7 @@ def _store(reading: CNCReading, result, pattern_count: int):
                 "thermal":   float(reading.thermal_gradient),
             }
             _alerts.append(alert)
-            if len(_alerts) > 50:
+            if len(_alerts) > 200:
                 _alerts.pop(0)
 
 
@@ -128,14 +128,15 @@ class Handler(BaseHTTPRequestHandler):
 
 # ── detection loop ────────────────────────────────────────────────────
 def detection_loop():
-    sensor    = CNCMachineSimulator(seed=42)
+    sensor    = CNCMachineSimulator(seed=42, training_mode=True)  # start in training mode
     extractor = CNCFeatureExtractor()
     engine    = QdrantEdgeEngine(fresh=True)
     detector  = AnomalyDetector(engine)
     tracker   = SpikeTracker(maxlen=600)
 
     print(f"[engine] Qdrant Edge shard: {config.QDRANT_SHARD_PATH}")
-    print(f"[engine] {config.VECTOR_SIZE}D CNC vectors | warmup={config.WARMUP_STEPS} | threshold={config.ANOMALY_THRESHOLD}")
+    print(f"[engine] {config.VECTOR_SIZE}D CNC vectors | training={config.TRAINING_STEPS} steps | threshold={config.ANOMALY_THRESHOLD}")
+    print(f"[engine] Phase 1: TRAINING — collecting pure normal baseline ({config.TRAINING_STEPS} steps)...")
 
     def _steps():
         if config.TOTAL_STEPS == 0:
@@ -144,9 +145,18 @@ def detection_loop():
         else:
             yield from range(config.TOTAL_STEPS)
 
+    _detection_started = False
+
     try:
         for _ in _steps():
             reading = sensor.read()
+
+            # switch from training → detection after TRAINING_STEPS
+            if not _detection_started and reading.step > config.TRAINING_STEPS:
+                sensor.set_training_mode(False)
+                _detection_started = True
+                print(f"[engine] Phase 2: DETECTION — faults now enabled. Qdrant Edge has {engine.pattern_count} normal patterns.")
+
             vector  = extractor.ingest(reading)
             if vector is None:
                 time.sleep(config.SLEEP_INTERVAL)
