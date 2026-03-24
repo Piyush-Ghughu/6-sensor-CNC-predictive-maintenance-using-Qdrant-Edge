@@ -10,5 +10,5 @@ ANOMALY_THRESHOLD = 0.72   # cosine similarity below this → anomaly
 SPIKE_Z_SCORE     = 2.5    # z-score multiplier for spike detection
 BASELINE_WINDOW   = 60     # rolling window size for spike stats
 
-TOTAL_STEPS       = 600
+TOTAL_STEPS       = 0      # 0 = run forever until Ctrl+C
 SLEEP_INTERVAL    = 0.08   # seconds between steps

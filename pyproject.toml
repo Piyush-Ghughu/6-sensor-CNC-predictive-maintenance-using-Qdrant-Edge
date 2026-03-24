@@ -8,4 +8,5 @@ dependencies = [
     "numpy>=2.4.3",
     "qdrant-edge-py>=0.6.0",
     "rich>=14.3.3",
+    "websockets>=16.0",
 ]

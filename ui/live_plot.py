@@ -77,11 +77,11 @@ def _build(result: AnomalyResult, tracker: SpikeTracker, patterns: int) -> Layou
 
     # ── status ────────────────────────────────────────────────────────
     if result.is_anomaly:
-        status_txt = Text("🚨  ANOMALY DETECTED", style="bold red blink")
+        status_txt = Text("  ANOMALY DETECTED", style="bold red blink")
     elif "WARMUP" in result.reason:
-        status_txt = Text("⏳  WARMUP", style="bold yellow")
+        status_txt = Text("  WARMUP", style="bold yellow")
     else:
-        status_txt = Text("✅  NORMAL", style="bold green")
+        status_txt = Text("  NORMAL", style="bold green")
 
     dt = Table(box=box.SIMPLE, show_header=False)
     dt.add_column("k", width=18)
