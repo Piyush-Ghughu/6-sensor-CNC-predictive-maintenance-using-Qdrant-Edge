@@ -23,20 +23,20 @@ class CNCFeatureExtractor:
 
     def __init__(self):
         self._bufs  = {s: deque(maxlen=WINDOW) for s, _, _ in self.SENSORS}
-        self._n     = 0
+        self._n     = {s: 0 for s, _, _ in self.SENSORS}
         self._means = {s: m  for s, m, _ in self.SENSORS}
         self._m2s   = {s: v**2 for s, _, v in self.SENSORS}
 
     def _welford(self, key: str, val: float):
-        self._n += 1
+        self._n[key] += 1
         d = val - self._means[key]
-        self._means[key] += d / self._n
+        self._means[key] += d / self._n[key]
         self._m2s[key]   += d * (val - self._means[key])
 
     def _std(self, key: str) -> float:
-        if self._n < 2:
+        if self._n[key] < 2:
             return 1.0
-        return max(1e-6, (self._m2s[key] / (self._n - 1)) ** 0.5)
+        return max(1e-6, (self._m2s[key] / (self._n[key] - 1)) ** 0.5)
 
     def _features(self, key: str) -> list:
         arr = np.array(self._bufs[key], dtype=np.float32)

@@ -60,7 +60,8 @@ class AnomalyDetector:
         anomaly_score = 1.0 - similarity
 
         spike, spike_conf = self._spike_check(anomaly_score)
-        self._history.append(anomaly_score)
+        if self._step > config.WARMUP_STEPS:
+            self._history.append(anomaly_score)
 
        
         # extract CNC fields if available
